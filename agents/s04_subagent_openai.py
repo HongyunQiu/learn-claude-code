@@ -225,9 +225,17 @@ def _extract_tool_request_from_text(text: str) -> Optional[Dict[str, Any]]:
     if isinstance(obj, dict) and isinstance(obj.get("tool"), str) and isinstance(obj.get("args"), dict):
         return obj
 
-    # Common local-model pattern: {"command": "..."}
+    # Common local-model patterns without explicit tool name
+    # 1) {"command": "..."} -> bash
     if isinstance(obj, dict) and isinstance(obj.get("command"), str):
         return {"tool": "bash", "args": {"command": obj["command"]}}
+
+    # 2) {"path": "...", "limit": N} -> read_file
+    if isinstance(obj, dict) and isinstance(obj.get("path"), str):
+        args = {"path": obj["path"]}
+        if isinstance(obj.get("limit"), int):
+            args["limit"] = obj["limit"]
+        return {"tool": "read_file", "args": args}
 
     return None
 

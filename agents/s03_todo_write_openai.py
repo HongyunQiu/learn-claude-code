@@ -305,6 +305,7 @@ def _extract_tool_request_from_text(text: str) -> Optional[Dict[str, Any]]:
     Supported:
       - {"tool": "bash", "args": {...}}
       - {"command": "..."}  (treated as bash)
+      - {"path": "...", "limit": 200} (treated as read_file)
     """
     try:
         obj = json.loads(text)
@@ -314,9 +315,17 @@ def _extract_tool_request_from_text(text: str) -> Optional[Dict[str, Any]]:
     if isinstance(obj, dict) and isinstance(obj.get("tool"), str) and isinstance(obj.get("args"), dict):
         return obj
 
-    # Common local-model pattern: {"command": "..."}
+    # Common local-model patterns without explicit tool name
+    # 1) {"command": "..."} -> bash
     if isinstance(obj, dict) and isinstance(obj.get("command"), str):
         return {"tool": "bash", "args": {"command": obj["command"]}}
+
+    # 2) {"path": "...", "limit": N} -> read_file
+    if isinstance(obj, dict) and isinstance(obj.get("path"), str):
+        args = {"path": obj["path"]}
+        if isinstance(obj.get("limit"), int):
+            args["limit"] = obj["limit"]
+        return {"tool": "read_file", "args": args}
 
     return None
 
@@ -332,7 +341,8 @@ def agent_loop(client: OpenAI, model: str, messages: List[Dict[str, Any]]) -> No
         "- If function calling is available, call tools normally.\n"
         "- Otherwise, when you want a tool, respond ONLY with JSON in one of these forms:\n"
         "    {\"tool\": <name>, \"args\": {...}}\n"
-        "    {\"command\": \"...\"}   (alias for bash)"
+        "    {\"command\": \"...\"}   (alias for bash)\n"
+        "    {\"path\": \"...\", \"limit\": 200} (alias for read_file)"
     )
     messages.insert(0, {"role": "system", "content": system})
 
