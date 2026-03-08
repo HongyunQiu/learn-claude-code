@@ -221,8 +221,14 @@ def _extract_tool_request_from_text(text: str) -> Optional[Dict[str, Any]]:
         obj = json.loads(text)
     except Exception:
         return None
+
     if isinstance(obj, dict) and isinstance(obj.get("tool"), str) and isinstance(obj.get("args"), dict):
         return obj
+
+    # Common local-model pattern: {"command": "..."}
+    if isinstance(obj, dict) and isinstance(obj.get("command"), str):
+        return {"tool": "bash", "args": {"command": obj["command"]}}
+
     return None
 
 

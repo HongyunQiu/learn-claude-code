@@ -17,9 +17,10 @@ Run:
 
 Notes about tool calling:
   - If the model emits proper tool_calls, we execute them.
-  - If it does not, we fallback to a JSON protocol:
+  - If it does not, we fallback to a JSON protocol. Supported forms:
       {"tool": "bash", "args": {"command": "ls"}}
       {"tool": "todo", "args": {"items": [...]}}
+      {"command": "ls"}   # treated as bash
     This keeps the lesson runnable on models that don't support tool_calls.
 """
 
@@ -299,13 +300,24 @@ def dispatch(tool: str, args: Dict[str, Any]) -> str:
 
 # ---------------- Agent Loop ----------------
 def _extract_tool_request_from_text(text: str) -> Optional[Dict[str, Any]]:
-    """Fallback protocol: {"tool": "bash", "args": {...}}"""
+    """Fallback protocol.
+
+    Supported:
+      - {"tool": "bash", "args": {...}}
+      - {"command": "..."}  (treated as bash)
+    """
     try:
         obj = json.loads(text)
     except Exception:
         return None
+
     if isinstance(obj, dict) and isinstance(obj.get("tool"), str) and isinstance(obj.get("args"), dict):
         return obj
+
+    # Common local-model pattern: {"command": "..."}
+    if isinstance(obj, dict) and isinstance(obj.get("command"), str):
+        return {"tool": "bash", "args": {"command": obj["command"]}}
+
     return None
 
 
@@ -318,7 +330,9 @@ def agent_loop(client: OpenAI, model: str, messages: List[Dict[str, Any]]) -> No
         "Prefer tools over prose when you need to inspect files or run commands.\n\n"
         "Tool calling:\n"
         "- If function calling is available, call tools normally.\n"
-        "- Otherwise, when you want a tool, respond ONLY with JSON: {\"tool\": <name>, \"args\": {...}}"
+        "- Otherwise, when you want a tool, respond ONLY with JSON in one of these forms:\n"
+        "    {\"tool\": <name>, \"args\": {...}}\n"
+        "    {\"command\": \"...\"}   (alias for bash)"
     )
     messages.insert(0, {"role": "system", "content": system})
 
